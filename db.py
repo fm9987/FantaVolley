@@ -24,7 +24,6 @@ class Manager(Base):
     joined_at  = Column(DateTime, default=datetime.utcnow)
 
     roster = relationship("Roster", back_populates="manager")
-    scores = relationship("Score", back_populates="manager")
 
 class Player(Base):
     __tablename__ = "players"
@@ -32,8 +31,9 @@ class Player(Base):
     name       = Column(String, nullable=False)
     team       = Column(String)           # SuperLega club (e.g. "Trentino")
     role       = Column(String)           # setter, libero, outside, middle, opposite
-    price      = Column(Integer, default=10)
-    avg_points = Column(Float, default=0.0)
+    drafted    = Column(String, default = "_")
+
+
 
 class Roster(Base):
     __tablename__ = "rosters"
@@ -68,14 +68,55 @@ class DraftPick(Base):
     manager = relationship("Manager")
     player  = relationship("Player")
 
-class Score(Base):
-    __tablename__ = "scores"
-    id         = Column(Integer, primary_key=True)
-    manager_id = Column(Integer, ForeignKey("managers.id"))
-    gameweek   = Column(Integer)
-    points     = Column(Float, default=0.0)
+class Games(Base):
+    __tablename__ = "games"
+    id          = Column(Integer, primary_key=True)
+    week        = Column(Integer)
+    home        = Column(String)
+    away        = Column(String)
+    score       = Column(Integer)
+    winner      = Column(String)
 
-    manager = relationship("Manager", back_populates="scores")
+    stats    = relationship("PlayerMatchStats", back_populates="match")  # ← added
+
+
+class PlayerMatchStats(Base):
+    __tablename__ = "player_stats"
+    id          = Column(Integer, primary_key=True)
+    match_id    = Column(Integer,ForeignKey("games.id"))
+    player_id   = Column(Integer, ForeignKey("players.id"))
+
+    # -- Attacking --
+    attack_points   = Column(Integer, default=0)
+    attack_errors   = Column(Integer, default=0)
+    attack_attempts = Column(Integer, default=0)
+    attack_eff      = Column(Float,   default=0.0)
+
+    # -- Blocking --
+    block_points    = Column(Integer, default=0)
+
+    # -- Serving --
+    serve_points   = Column(Integer, default=0)
+    serve_errors   = Column(Integer, default=0)
+    serve_attempts = Column(Integer, default=0)
+    serve_eff      = Column(Float,   default=0.0)
+
+    # -- Reception --
+    reception_ok       = Column(Integer, default=0)
+    reception_per      = Column(Integer, default=0)
+    reception_attempts = Column(Integer, default=0)
+    reception_score    = Column(Float,   default=0.0)
+
+    # -- Setting --
+    set_assists   = Column(Integer, default=0)
+
+    # Points earned in the game
+    fantasy_points  = Column(Integer, default=0)
+
+    match  = relationship("Games",  back_populates="stats")
+    player = relationship("Player")
+
+
 
 # ── Helpers ─────────────────────────────────────────
 
