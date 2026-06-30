@@ -9,7 +9,6 @@ import tempfile
 import random
 import math
 
-
 WIDTH, HEIGHT = 1000, 1150
 
 BG_TOP_COLOR     = (244, 196, 48)
@@ -22,17 +21,6 @@ TITLE_COLOR      = (30, 50, 130)
 BENCH_BG_COLOR   = (14, 17, 24)
 BENCH_TEXT_COLOR = (244, 196, 48)
 BENCH_NAME_COLOR = (220, 222, 230)
-
-CLUB_COLORS = {
-    "trento":     ((255, 102, 0),  (40, 40, 45)),    # orange/black
-    "perugia":    ((220, 20, 40),  (250, 250, 250)), # red/white
-    "civitanova": ((200, 30, 40),  (20, 20, 25)),    # red/black
-    "modena":     ((250, 200, 0),  (20, 20, 25)),    # yellow/black
-    "milano":     ((230, 0, 40),   (20, 20, 25)),    # red/black
-    "piacenza":   ((200, 20, 30),  (250, 250, 250)), # red/white
-    "verona":     ((20, 20, 25),   (250, 250, 250)), # black/white
-    "monza":      ((200, 30, 40),  (250, 250, 250)), # red/white
-}
 
 ASSETS_DIR     = Path(__file__).parent / "assets"
 PLAYER_IMG_DIR = ASSETS_DIR / "players"
@@ -92,7 +80,6 @@ def _get_player_image(player_name: str, size: int):
 
 def _get_team_logo(team_name: str, size: int):
     filename = team_name.lower().replace(" ", "_").replace("'", "") + ".png"
-    # filename = "akatsuki.png"
     path = LOGO_DIR / filename
     if path.exists():
         return Image.open(path).convert("RGBA").resize((size, size))
@@ -116,39 +103,31 @@ def _extract_palette(logo: Image.Image, n: int = 4) -> list[tuple[int, int, int]
     return colors
 
 
-# def _pick_banner_and_court_colors(logo: Image.Image):
-#     """
-#     From the extracted palette, pick a 'bright/banner' color and a
-#     'deep/court' color. Heuristic: brightest color -> banner,
-#     darkest distinct color -> court base.
-#     """
-#     palette = _extract_palette(logo, n=5)
+CLUB_COLORS = {
+    "trento":     ((255, 102, 0),   (40, 40, 45)),
+    "perugia":    ((220, 20, 40),   (20, 20, 25)),
+    "civitanova": ((200, 30, 40),   (20, 20, 25)),
+    "modena":     ((250, 200, 0),   (20, 20, 25)),
+    "milano":     ((230, 0, 40),    (20, 20, 25)),
+    "piacenza":   ((200, 20, 30),   (20, 20, 25)),
+    "verona":     ((20, 20, 25),    (40, 40, 50)),
+    "monza":      ((200, 30, 40),   (20, 20, 25)),
+}
 
-#     def brightness(c):
-#         return 0.299*c[0] + 0.587*c[1] + 0.114*c[2]
+def _pick_banner_and_court_colors(logo, team: str = None):
+    """
+    Pick banner and court colors. Checks CLUB_COLORS first by team name,
+    then falls back to logo extraction, then to hardcoded defaults.
+    """
+    def brightness(c):
+        return 0.299*c[0] + 0.587*c[1] + 0.114*c[2]
 
-#     palette_sorted = sorted(palette, key=brightness, reverse=True)
-#     banner_color = palette_sorted[0]
-#     # pick the darkest color that isn't near-black/near-white for the court
-#     court_candidates = [c for c in palette_sorted if 40 < brightness(c) < 200]
-#     court_color = court_candidates[-1] if court_candidates else palette_sorted[-1]
-
-#     return banner_color, court_color
-
-def _pick_banner_and_court_colors(logo, team_name=None):
-    # team_name = "modena"
-    logo = _get_team_logo("Mine",100)
-    if team_name:
-        key = team_name.lower().strip()
+    if not logo:
+        key = team.lower().strip()
         if key in CLUB_COLORS:
             return CLUB_COLORS[key]
-    # fall back to logo extraction
-    if logo:
+    else:
         palette = _extract_palette(logo, n=5)
-
-        def brightness(c):
-            return 0.299*c[0] + 0.587*c[1] + 0.114*c[2]
-
         palette_sorted = sorted(palette, key=brightness, reverse=True)
         banner_color = palette_sorted[0]
         court_candidates = [c for c in palette_sorted if 40 < brightness(c) < 200]
@@ -186,15 +165,60 @@ def _short_label(name: str, number: int = None, max_chars: int = 13) -> str:
     return f"{number}.{label}".upper() if number else label.upper()
 
 
+def _draw_crown(draw: ImageDraw.Draw, x: int, y: int, size: int):
+    """Draw a small gold crown above a player circle."""
+    cw = size // 2          # crown width
+    ch = int(size * 0.28)   # crown height
+    cx, cy = x, y - size//2 - ch - 4
+
+    gold       = (255, 200, 40)
+    gold_dark  = (200, 140, 10)
+
+    # base bar
+    draw.rectangle([cx - cw//2, cy + ch//2, cx + cw//2, cy + ch], fill=gold)
+
+    # three points of the crown (left, center, right)
+    points = [
+        # left point
+        [(cx - cw//2, cy + ch), (cx - cw//2, cy + ch//3), (cx - cw//6, cy + ch//2)],
+        # center point (taller)
+        [(cx - cw//6, cy + ch//2), (cx, cy), (cx + cw//6, cy + ch//2)],
+        # right point
+        [(cx + cw//6, cy + ch//2), (cx + cw//2, cy + ch//3), (cx + cw//2, cy + ch)],
+    ]
+    for pts in points:
+        draw.polygon(pts, fill=gold, outline=gold_dark)
+
+    # three gem dots on tips
+    gem_r = max(3, size // 22)
+    for gx, gy in [(cx - cw//2, cy + ch//3), (cx, cy), (cx + cw//2, cy + ch//3)]:
+        draw.ellipse([gx-gem_r, gy-gem_r, gx+gem_r, gy+gem_r], fill=(255, 240, 100))
+
+
 def _draw_player(img, draw, x, y, name, role, photo_size=90, number=None,
-                  on_court=True, tag_bg=TAG_BG_COLOR, tag_text=TAG_TEXT_COLOR):
+                  on_court=True, tag_bg=TAG_BG_COLOR, tag_text=TAG_TEXT_COLOR,
+                  is_captain=False):
     photo = _get_player_image(name, photo_size)
+    ring_color = (255, 200, 40) if is_captain else (255, 255, 255)
+    ring_width = 6 if is_captain else 4
+
     if photo:
         img.paste(photo, (x - photo_size//2, y - photo_size//2), photo)
         draw.ellipse([x-photo_size//2, y-photo_size//2, x+photo_size//2, y+photo_size//2],
-                      outline=(255, 255, 255), width=4)
+                      outline=ring_color, width=ring_width)
+        # extra outer glow ring for captain
+        if is_captain:
+            draw.ellipse([x-photo_size//2-5, y-photo_size//2-5,
+                          x+photo_size//2+5, y+photo_size//2+5],
+                          outline=(255, 200, 40, 120), width=2)
     else:
         _initials_circle(draw, x, y, photo_size, name)
+        if is_captain:
+            draw.ellipse([x-photo_size//2, y-photo_size//2, x+photo_size//2, y+photo_size//2],
+                          outline=ring_color, width=ring_width)
+
+    if is_captain:
+        _draw_crown(draw, x, y, photo_size)
 
     label = _short_label(name, number)
     font_tag = _font(13 if on_court else 12)
@@ -237,7 +261,7 @@ def _draw_court_texture(top_color: tuple, bottom_color: tuple):
 
 
 def render_lineup(team_name: str, starters: list[dict], bench: list[dict],
-                   output_path: str = None) -> str:
+                   team: str = None, output_path: str = None) -> str:
     """
     starters: list of dicts {"name": str, "role": str, "number": int (optional)}
     bench:    same format, rendered as photo row at the bottom
@@ -261,10 +285,7 @@ def render_lineup(team_name: str, starters: list[dict], bench: list[dict],
         ImageDraw.Draw(mask).ellipse((0, 0, logo_size, logo_size), fill=255)
 
     # ── Dynamic team colors from the logo, with sensible fallback ──────
-    if logo:
-        banner_color, court_color = _pick_banner_and_court_colors(logo)
-    else:
-        banner_color, court_color = BG_TOP_COLOR, COURT_BOTTOM_COLOR
+    banner_color, court_color = _pick_banner_and_court_colors(logo, team)
 
     title_color = _readable_text_color(banner_color)
     tag_text_color = _readable_text_color(TAG_BG_COLOR)
@@ -357,7 +378,8 @@ def render_lineup(team_name: str, starters: list[dict], bench: list[dict],
         y_frac = FRONT_Y if row_name == "front" else BACK_Y
         x, y = _trapezoid_point(y_frac, x_frac)
         _draw_player(img, draw, x, y, p["name"], role, photo_size=92, number=p.get("number"),
-                     tag_bg=banner_color, tag_text=title_color)
+                     tag_bg=banner_color, tag_text=title_color,
+                     is_captain=p.get("is_captain"))
 
     # ── Libero — outside the court, right side ───────────────────────
     for i, p in enumerate(libero_players):
@@ -365,7 +387,8 @@ def render_lineup(team_name: str, starters: list[dict], bench: list[dict],
         y = TRAP_TOP_Y + (TRAP_BOTTOM_Y - TRAP_TOP_Y) * (0.42 + i * 0.34)
         _draw_player(img, draw, int(x), int(y), p["name"], "libero",
                      photo_size=85, number=p.get("number"),
-                     tag_bg=banner_color, tag_text=title_color)
+                     tag_bg=banner_color, tag_text=title_color,
+                     is_captain=p.get("is_captain"))
     if libero_players:
         lx = TRAP_BOTTOM_RIGHT_X + 115
         ly = TRAP_TOP_Y + (TRAP_BOTTOM_Y - TRAP_TOP_Y) * 0.42 - 75
@@ -391,7 +414,8 @@ def render_lineup(team_name: str, starters: list[dict], bench: list[dict],
             cx = 40 + slot_w * i + slot_w/2
             _draw_player(img, draw, int(cx), row_y, p["name"], p["role"],
                          photo_size=photo_size, number=p.get("number"), on_court=False,
-                         tag_bg=banner_color, tag_text=title_color)
+                         tag_bg=banner_color, tag_text=title_color,
+                         is_captain=p.get("is_captain", False))
 
     img.save(output_path)
     return output_path
@@ -399,7 +423,7 @@ def render_lineup(team_name: str, starters: list[dict], bench: list[dict],
 
 if __name__ == "__main__":
     starters = [
-        {"name": "Keita Noumory",          "role": "outside",  "number": 4},
+        {"name": "Keita Noumory",          "role": "outside",  "number": 4, "is_captain": True},
         {"name": "Mozic Rok",               "role": "outside",  "number": 5},
         {"name": "Christenson Micah",       "role": "setter",   "number": 1},
         {"name": "Vitelli Marco",           "role": "middle",   "number": 3},
@@ -414,5 +438,5 @@ if __name__ == "__main__":
         {"name": "Loreti Luca",       "role": "libero",   "number": 11},
         {"name": "Seddik Joris",      "role": "middle",   "number": 12},
     ]
-    path = render_lineup("Ace Spikers", starters, bench, "lineup_test.png")
+    path = render_lineup("Akatsuki", starters, bench, "modena", "lineup_test.png")
     print(f"Saved to {path}")

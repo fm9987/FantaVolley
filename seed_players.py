@@ -43,8 +43,8 @@ Piacenza = [
     Player(name="Seddik Joris",           team="Piacenza", role="middle"),
 ]
 
-db.add_all(Verona)
-db.add_all(Piacenza)
+# db.add_all(Verona)
+# db.add_all(Piacenza)
 db.commit()
 db.close()
 print(f"Seeded all the players.")

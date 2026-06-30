@@ -20,7 +20,7 @@ class Manager(Base):
     discord_id = Column(String, unique=True, nullable=False)
     team_name  = Column(String, unique=True, nullable=False)
     logo_url   = Column(String, nullable=True)   # ← add this
-    budget     = Column(Integer, default=100)  # credits for auction drafts
+    team     = Column(String, nullable=False)  # credits for auction drafts
     joined_at  = Column(DateTime, default=datetime.utcnow)
 
     roster = relationship("Roster", back_populates="manager")
@@ -123,7 +123,15 @@ class PlayerMatchStats(Base):
     match  = relationship("Games",  back_populates="stats")
     player = relationship("Player")
 
-
+class FantasyMatchup(Base):
+    __tablename__   = "fantasy_matchups"
+    id              = Column(Integer, primary_key=True)
+    gameweek        = Column(Integer)
+    home_manager_id = Column(Integer, ForeignKey("managers.id"))
+    away_manager_id = Column(Integer, ForeignKey("managers.id"))
+    home_points     = Column(Integer, default=0)
+    away_points     = Column(Integer, default=0)
+    winner_id       = Column(Integer, ForeignKey("managers.id"), nullable=True)
 
 # ── Helpers ─────────────────────────────────────────
 

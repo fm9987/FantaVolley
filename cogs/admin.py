@@ -17,8 +17,11 @@ class Admin(commands.Cog):
     # ── /register ─────────────────────────────────────────────────────────────
 
     @app_commands.command(name="register", description="Register yourself as a fantasy manager")
-    @app_commands.describe(team_name="Your team's name")
-    async def register(self, interaction: discord.Interaction, team_name: str):
+    @app_commands.describe(
+        team_name="Your team's name",
+        associate="The actual SUPERLEGA team to be connected with"
+        )
+    async def register(self, interaction: discord.Interaction, team_name: str, associate: str):
         db = SessionLocal()
         try:
             discord_id = str(interaction.user.id)
@@ -37,7 +40,7 @@ class Admin(commands.Cog):
                 )
                 return
 
-            manager = Manager(discord_id=discord_id, team_name=team_name)
+            manager = Manager(discord_id=discord_id, team_name=team_name, team = associate)
             db.add(manager)
             db.commit()
 
@@ -84,47 +87,6 @@ class Admin(commands.Cog):
         finally:
             db.close()
 
-    # ── /myteam ───────────────────────────────────────────────────────────────
-
-    @app_commands.command(name="myteam", description="View your current roster")
-    async def myteam(self, interaction: discord.Interaction):
-        db = SessionLocal()
-        try:
-            manager = db.query(Manager).filter_by(
-                discord_id=str(interaction.user.id)
-            ).first()
-
-            if not manager:
-                await interaction.response.send_message(
-                    "You haven't registered yet. Use /register first.", ephemeral=True
-                )
-                return
-
-            starters = [r for r in manager.roster if r.is_starter]
-            bench    = [r for r in manager.roster if not r.is_starter]
-
-            embed = discord.Embed(title=manager.team_name, color=discord.Color.blue())
-
-            if manager.logo_url:
-                embed.set_thumbnail(url=manager.logo_url)
-
-            starter_lines = (
-                "\n".join(f"• {r.player.name} ({r.player.role})" for r in starters)
-                or "— empty —"
-            )
-            bench_lines = (
-                "\n".join(f"• {r.player.name} ({r.player.role})" for r in bench)
-                or "— empty —"
-            )
-
-            embed.add_field(name="Starters", value=starter_lines, inline=False)
-            embed.add_field(name="Bench",    value=bench_lines,   inline=False)
-            embed.set_footer(text=f"Budget: {manager.budget} credits")
-
-            await interaction.response.send_message(embed=embed)
-
-        finally:
-            db.close()
 
     # ── /managers ─────────────────────────────────────────────────────────────
 
@@ -145,68 +107,7 @@ class Admin(commands.Cog):
         finally:
             db.close()
 
-    # ── /seed_players ─────────────────────────────────────────────────────────
-
-    @app_commands.command(name="seed_players", description="Run the seed_players script (admin only)")
-    @channel_only(lambda: config.CHANNEL_ADMIN)
-    async def seed_players(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("Admin only.", ephemeral=True)
-            return
-
-        await interaction.response.defer(ephemeral=True)
-
-        try:
-            script = Path(__file__).parent.parent / "seed_players.py"
-            result = subprocess.run(
-                [sys.executable, str(script)],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            output = result.stdout or result.stderr or "No output"
-            status = "✅" if result.returncode == 0 else "❌"
-            await interaction.followup.send(
-                f"{status} seed_players.py ran:\n```\n{output[:1900]}\n```",
-                ephemeral=True
-            )
-        except subprocess.TimeoutExpired:
-            await interaction.followup.send("❌ Script timed out.", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
-
-    # ── /add_game ─────────────────────────────────────────────────────────────
-
-    @app_commands.command(name="add_game", description="Run the add_game script (admin only)")
-    @channel_only(lambda: config.CHANNEL_ADMIN)
-    async def add_game(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("Admin only.", ephemeral=True)
-            return
-
-        await interaction.response.defer(ephemeral=True)
-
-        try:
-            script = Path(__file__).parent.parent / "add_game.py"
-            result = subprocess.run(
-                [sys.executable, str(script)],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            output = result.stdout or result.stderr or "No output"
-            status = "✅" if result.returncode == 0 else "❌"
-            await interaction.followup.send(
-                f"{status} add_game.py ran:\n```\n{output[:1900]}\n```",
-                ephemeral=True
-            )
-        except subprocess.TimeoutExpired:
-            await interaction.followup.send("❌ Script timed out.", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
-
     # ── /transfers_lock ───────────────────────────────────────────────────────
-
     @app_commands.command(name="transfers_lock", description="Lock roster changes (admin only)")
     @channel_only(lambda: config.CHANNEL_ADMIN)
     async def transfers_lock(self, interaction: discord.Interaction):
@@ -219,7 +120,7 @@ class Admin(commands.Cog):
             from db import set_state
             set_state(db, "transfers_locked", "true")
 
-            lineup_ch = self.bot.get_channel(config.CHANNEL_LINEUP)
+            lineup_ch = self.bot.get_channel(config.CHANNEL_ID)
             if lineup_ch:
                 await lineup_ch.send(
                     "🔒 **Transfers and lineup changes are now LOCKED.**\n"
@@ -243,7 +144,7 @@ class Admin(commands.Cog):
             from db import set_state
             set_state(db, "transfers_locked", "false")
 
-            lineup_ch = self.bot.get_channel(config.CHANNEL_LINEUP)
+            lineup_ch = self.bot.get_channel(config.CHANNEL_ID)
             if lineup_ch:
                 await lineup_ch.send(
                     "🔓 **Transfers and lineup changes are now OPEN.**\n"

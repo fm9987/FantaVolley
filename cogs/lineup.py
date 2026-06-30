@@ -370,6 +370,19 @@ class Lineup(commands.Cog):
             current_gw = int(get_state(db, "current_gameweek", "1"))
 
             # find the player on this manager's roster (partial name match)
+            current_captain = (
+                db.query(Roster)
+                .join(Roster.player)
+                .filter(
+                    Roster.manager_id == manager.id,
+                    Roster.gameweek == current_gw,
+                    Roster.is_captain == True
+                )
+                .first()
+            )
+            if current_captain:
+                current_captain.is_captain = False
+
             entry = (
                 db.query(Roster)
                 .join(Roster.player)
@@ -386,12 +399,11 @@ class Lineup(commands.Cog):
                     f"Couldn't find **{player_name}** on your roster.", ephemeral=True
                 )
                 return
-
             entry.is_captain = True
             db.commit()
 
             await interaction.response.send_message(
-                f"✅ **{entry.player.name}** is now your captain! x2 points for him this week"
+                f"✅ **{entry.player.name}** is now your captain! x2 points for him during week {current_gw}"
             )
         finally:
             db.close()
@@ -421,7 +433,7 @@ class Lineup(commands.Cog):
 
             # convert Roster objects into plain dicts for render_lineup
             starters_data = [
-                {"name": r.player.name, "role": r.player.role, "number": r.player.id}
+                {"name": r.player.name, "role": r.player.role, "number": r.player.id, "is_captain": r.is_captain}
                 for r in starters
             ]
             bench_data = [
@@ -441,7 +453,7 @@ class Lineup(commands.Cog):
 
             # generate the court image BEFORE sending the response
             await interaction.response.defer(ephemeral=True)
-            image_path = render_lineup(manager.team_name, starters_data, bench_data)
+            image_path = render_lineup(manager.team_name, starters_data, bench_data, manager.team)
 
             await interaction.followup.send(
                 content="\n".join(lines),
