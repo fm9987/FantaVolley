@@ -22,7 +22,7 @@ BENCH_BG_COLOR   = (14, 17, 24)
 BENCH_TEXT_COLOR = (244, 196, 48)
 BENCH_NAME_COLOR = (220, 222, 230)
 
-ASSETS_DIR     = Path(__file__).parent / "assets"
+ASSETS_DIR     = Path(__file__).parent.parent / "assets"
 PLAYER_IMG_DIR = ASSETS_DIR / "players"
 LOGO_DIR       = ASSETS_DIR / "logos"
 FONT_DIR       = ASSETS_DIR / "fonts"
