@@ -33,14 +33,13 @@ class Player(Base):
     role       = Column(String)           # setter, libero, outside, middle, opposite
     drafted    = Column(String, default = "_")
 
-
-
 class Roster(Base):
     __tablename__ = "rosters"
     id         = Column(Integer, primary_key=True)
     manager_id = Column(Integer, ForeignKey("managers.id"))
     player_id  = Column(Integer, ForeignKey("players.id"))
     is_starter = Column(Boolean, default=False)
+    is_captain = Column(Boolean, default=False)
     gameweek   = Column(Integer, default=1)
 
     manager = relationship("Manager", back_populates="roster")
@@ -78,6 +77,13 @@ class Games(Base):
     winner      = Column(String)
 
     stats    = relationship("PlayerMatchStats", back_populates="match")  # ← added
+
+# add this class alongside your other models in db.py
+class LeagueState(Base):
+    __tablename__ = "league_state"
+    id    = Column(Integer, primary_key=True)
+    key   = Column(String, unique=True, nullable=False)
+    value = Column(String, nullable=False)
 
 
 class PlayerMatchStats(Base):
@@ -127,6 +133,18 @@ def init_db():
 def get_db():
     db = SessionLocal()
 
+# add these helper functions near init_db()
+def get_state(db, key: str, default: str = None) -> str:
+    row = db.query(LeagueState).filter_by(key=key).first()
+    return row.value if row else default
+
+def set_state(db, key: str, value: str):
+    row = db.query(LeagueState).filter_by(key=key).first()
+    if row:
+        row.value = value
+    else:
+        db.add(LeagueState(key=key, value=value))
+    db.commit()
 
 def calculate_fantasy_points(role: str, stats: dict) -> int:
     pts = 0

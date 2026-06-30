@@ -176,7 +176,7 @@ class Draft(commands.Cog):
             roster_entry = Roster(
                 manager_id = manager.id,
                 player_id  = player.id,
-                is_starter = manager_picks < STARTERS
+                is_starter = False
             )
             db.add(roster_entry)
 
@@ -247,7 +247,7 @@ class Draft(commands.Cog):
             query = db.query(Player).filter(Player.id.notin_(picked_ids))
             if role:
                 query = query.filter_by(role=role.value)
-            available = query.order_by(Player.avg_points.desc()).all()
+            available = query.order_by(Player.id).all()
 
             if not available:
                 await interaction.response.send_message(
@@ -259,7 +259,7 @@ class Draft(commands.Cog):
             lines = [f"**Available players{role_label}:**\n"]
             for p in available[:20]:   # cap at 20 to avoid huge messages
                 lines.append(
-                    f"• **{p.name}** — {p.team} | {p.role} | ⭐ {p.avg_points:.1f} pts"
+                    f"• **{p.name}** — {p.team} | {p.role} | ⭐ pts"
                 )
             if len(available) > 20:
                 lines.append(f"_...and {len(available) - 20} more. Filter by role to narrow down._")
