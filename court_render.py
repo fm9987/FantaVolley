@@ -122,11 +122,13 @@ def _pick_banner_and_court_colors(logo, team: str = None):
     def brightness(c):
         return 0.299*c[0] + 0.587*c[1] + 0.114*c[2]
 
-    if not logo:
+    # guard against None
+    if team:
         key = team.lower().strip()
         if key in CLUB_COLORS:
             return CLUB_COLORS[key]
-    else:
+
+    if logo:
         palette = _extract_palette(logo, n=5)
         palette_sorted = sorted(palette, key=brightness, reverse=True)
         banner_color = palette_sorted[0]

@@ -133,8 +133,16 @@ class FantasyMatchup(Base):
     away_points     = Column(Integer, default=0)
     winner_id       = Column(Integer, ForeignKey("managers.id"), nullable=True)
 
-# ── Helpers ─────────────────────────────────────────
+class WeeklyAward(Base):
+    __tablename__ = "weekly_awards"
+    id         = Column(Integer, primary_key=True)
+    gameweek   = Column(Integer, nullable=False)
+    award_type = Column(String, nullable=False)   # see constants below
+    manager_id = Column(Integer, ForeignKey("managers.id"))  # who owns the player
+    player_id  = Column(Integer, ForeignKey("players.id"), nullable=True)  # None for MOTW
+    stat_value = Column(Integer, default=0)        # the actual kills/blocks/pts that won it
 
+# ── Helpers ─────────────────────────────────────────
 def init_db():
     Base.metadata.create_all(engine)
 

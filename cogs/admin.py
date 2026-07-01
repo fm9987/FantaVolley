@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from discord import app_commands
 from discord.ext import commands
-from db import SessionLocal, Manager, init_db
+from db import SessionLocal, Manager, init_db, WeeklyAward, Player, get_state
 import config
 from utils import channel_only
 
@@ -51,7 +51,6 @@ class Admin(commands.Cog):
             db.close()
 
     # ── /team_logo ────────────────────────────────────────────────────────────
-
     @app_commands.command(name="team_logo", description="Upload your team logo")
     @app_commands.describe(logo="Your team logo image (png, jpg, gif)")
     async def team_logo(self, interaction: discord.Interaction, logo: discord.Attachment):
@@ -89,7 +88,6 @@ class Admin(commands.Cog):
 
 
     # ── /managers ─────────────────────────────────────────────────────────────
-
     @app_commands.command(name="managers", description="List all registered managers")
     async def managers(self, interaction: discord.Interaction):
         db = SessionLocal()
@@ -131,7 +129,6 @@ class Admin(commands.Cog):
             db.close()
 
     # ── /transfers_unlock ─────────────────────────────────────────────────────
-
     @app_commands.command(name="transfers_unlock", description="Unlock roster changes (admin only)")
     @channel_only(lambda: config.CHANNEL_ADMIN)
     async def transfers_unlock(self, interaction: discord.Interaction):
@@ -155,12 +152,10 @@ class Admin(commands.Cog):
             db.close()
 
     # ── /league_status ────────────────────────────────────────────────────────
-
     @app_commands.command(name="league_status", description="Check lock status and current gameweek")
     async def league_status(self, interaction: discord.Interaction):
         db = SessionLocal()
         try:
-            from db import get_state
             locked = get_state(db, "transfers_locked", "false") == "true"
             gw     = get_state(db, "current_gameweek", "1")
             status = "🔒 Locked" if locked else "🔓 Open"
@@ -171,6 +166,148 @@ class Admin(commands.Cog):
             )
         finally:
             db.close()
+
+    @app_commands.command(name="awards", description="Who got the awards this week")
+    async def awards(self, interaction: discord.Interaction):
+        await interaction.response.defer()   # defer immediately — prevents timeout and double-response issues
+        db = SessionLocal()
+        try:
+            gw = int(get_state(db, "current_gameweek", "0"))
+            # gw = 0
+
+            # auto-calculate if not done yet
+            existing = db.query(WeeklyAward).filter_by(gameweek=gw).first()
+            if not existing:
+                try:
+                    calculate_weekly_awards(db, gw)
+                except Exception as e:
+                    await interaction.followup.send(
+                        f"❌ Failed to calculate awards: `{e}`", ephemeral=True
+                    )
+                    return
+
+            award_rows = db.query(WeeklyAward).filter_by(gameweek=gw).all()
+
+            if not award_rows:
+                await interaction.followup.send(
+                    f"No stats found for Gameweek {gw} yet — make sure games have been added.",
+                    ephemeral=True
+                )
+                return
+
+            icons = {
+                "motw":         "👑 Manager of the Week",
+                "spike_king":   "⚡ Spike King",
+                "the_wall":     "🧱 The Wall",
+                "digs_machine": "🛡️ Digs Machine",
+                "ace_master":   "🎯 Ace Master",
+            }
+
+            lines = [f"🏆 **Gameweek {gw} Awards**\n"]
+            for a in award_rows:
+                mgr = db.get(Manager, a.manager_id)
+                icon = icons.get(a.award_type, "🏅")
+                if a.player_id:
+                    player = db.get(Player, a.player_id)
+                    lines.append(
+                        f"{icon}: **{player.name}** ({mgr.team_name}) — {a.stat_value}"
+                    )
+                else:
+                    lines.append(f"{icon}: **{mgr.team_name}** — {a.stat_value} pts")
+
+            await interaction.followup.send("\n".join(lines))
+
+        finally:
+            db.close()
+    
+def calculate_weekly_awards(db, gameweek: int):
+    from sqlalchemy import text
+
+    AWARD_MOTW         = "motw"
+    AWARD_SPIKE_KING   = "spike_king"
+    AWARD_THE_WALL     = "the_wall"
+    AWARD_DIGS_MACHINE = "digs_machine"
+    AWARD_ACE_MASTER   = "ace_master"
+
+    # get game IDs for this gameweek
+    game_ids = db.execute(text(
+        "SELECT id FROM games WHERE week = :gw"
+    ), {"gw": gameweek}).fetchall()
+    gids = [r.id for r in game_ids]
+
+    print(f"[awards] GW{gameweek} — found {len(gids)} games: {gids}")
+
+    if not gids:
+        print("[awards] No games found, aborting.")
+        return
+
+    placeholders = ",".join(str(g) for g in gids)
+
+    # ── player-level awards ───────────────────────────────────────
+    # NOTE: removed the is_starter filter — award goes to whoever
+    # had the best stats regardless of roster status
+    stat_awards = [
+        (AWARD_SPIKE_KING,   "attack_points"),
+        (AWARD_THE_WALL,     "block_points"),
+        (AWARD_DIGS_MACHINE, "digs"),
+        (AWARD_ACE_MASTER,   "serve_points"),
+    ]
+
+    for award_type, stat_col in stat_awards:
+        row = db.execute(text(f"""
+            SELECT ps.player_id, SUM(ps.{stat_col}) AS total,
+                   r.manager_id
+            FROM player_stats ps
+            LEFT JOIN rosters r ON r.player_id = ps.player_id
+                AND r.gameweek = :gw
+            WHERE ps.match_id IN ({placeholders})
+            GROUP BY ps.player_id
+            ORDER BY total DESC
+            LIMIT 1
+        """), {"gw": gameweek}).fetchone()
+
+        print(f"[awards] {award_type}: player_id={row.player_id if row else None}, "
+              f"total={row.total if row else 0}, manager={row.manager_id if row else None}")
+
+        if row and row.total and row.total > 0 and row.manager_id:
+            db.add(WeeklyAward(
+                gameweek   = gameweek,
+                award_type = award_type,
+                manager_id = row.manager_id,
+                player_id  = row.player_id,
+                stat_value = int(row.total)
+            ))
+            print(f"[awards] ✅ Added {award_type}")
+        else:
+            print(f"[awards] ⚠️ Skipped {award_type} — no valid row or manager_id is None")
+
+    # ── manager of the week ────────────────────────────────────────
+    motw = db.execute(text(f"""
+        SELECT r.manager_id, SUM(ps.fantasy_points) AS total
+        FROM player_stats ps
+        JOIN rosters r ON r.player_id = ps.player_id
+            AND r.gameweek = :gw
+        WHERE ps.match_id IN ({placeholders})
+        GROUP BY r.manager_id
+        ORDER BY total DESC
+        LIMIT 1
+    """), {"gw": gameweek}).fetchone()
+
+    print(f"[awards] motw: manager_id={motw.manager_id if motw else None}, "
+          f"total={motw.total if motw else 0}")
+
+    if motw and motw.total and motw.total > 0:
+        db.add(WeeklyAward(
+            gameweek   = gameweek,
+            award_type = AWARD_MOTW,
+            manager_id = motw.manager_id,
+            player_id  = None,
+            stat_value = int(motw.total)
+        ))
+        print("[awards] ✅ Added motw")
+
+    db.commit()
+    print("[awards] ✅ Committed all awards")
 
 
 async def setup(bot: commands.Bot):
