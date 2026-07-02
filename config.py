@@ -11,6 +11,6 @@ CHANNEL_ADMIN     = int(os.getenv("CHANNEL_ADMIN"))
 
 
 # Fantasy league settings
-MAX_ROSTER_SIZE = 12
+MAX_ROSTER_SIZE = 10
 LINEUP_SIZE     = 6   # starters per week
 TRADE_TIMEOUT   = 48  # hours to accept/decline
