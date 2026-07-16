@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}SuperLega Fantasy — Home{% endblock %}
+{% block content %}
+
+<div class="hero">
+    <h1>SuperLega <span>Fantasy</span></h1>
+    <p>Pick your squad. Trust the stats. Dominate the league.</p>
+</div>
+
+<div class="two-col">
+
+    <div>
+        <div class="section-title">Recent <span>Results - {{ current_week }} </span></div>
+        <div class="match-grid">
+            {% for game in games %}
+            <a href="/matches/{{ game.id }}" class="match-card">
+
+                <div>
+                    <div style="display:flex; align-items:center; gap:0.6rem;">
+                        <img src="{{ url_for('static', filename='clubs/' + game.home.lower() + '.png') }}"
+                            onerror="this.style.display='none'" class="club-logo-sm" alt="">
+                        <div class="match-team home">{{ game.home }}</div>
+                    </div>
+                    {% if game.winner == game.home %}
+                    <div style="font-size:0.72rem; color:var(--accent); margin-top:0.3rem; margin-left:2rem;">Winner ✓</div>
+                    {% endif %}
+                </div>
+
+                <div class="match-score">
+                    {% if game.score and game.winner %}
+                        {% if game.winner == game.home %}
+                            3-{{ game.score }}
+                        {% else %}
+                            {{ game.score }}-3
+                        {% endif %}
+                    {% else %}
+                        vs
+                    {% endif %}
+                    <div class="match-meta">Week {{ current_week }}</div>
+                </div>
+
+                <div style="text-align:right;">
+                    <div style="display:flex; align-items:center; gap:0.6rem; justify-content:flex-end;">
+                        <div class="match-team away">{{ game.away }}</div>
+                        <img src="{{ url_for('static', filename='clubs/' + game.away.lower() + '.png') }}"
+                            onerror="this.style.display='none'" class="club-logo-sm" alt="">
+                    </div>
+                    {% if game.winner == game.away %}
+                    <div style="font-size:0.72rem; color:var(--accent); margin-top:0.3rem; margin-right:2rem;">Winner ✓</div>
+                    {% endif %}
+                </div>
+
+            </a>
+            {% else %}
+            <div class="card text-muted text-center" style="padding:2rem;">No matches played yet.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div>
+        <div class="section-title">Managers <span>Registered</span></div>
+        <div class="card">
+            {% if managers %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Team</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in managers %}
+                    <tr>
+                        <td class="text-muted">{{ loop.index }}</td>
+                        <td><a href="/teams/{{ m.id }}">{{ m.team_name }}</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted">No managers registered yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
